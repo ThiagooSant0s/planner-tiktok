@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Projeto Liberdade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Neutrals (Beige, Warm Gray, Muted Teal) -->
+    <!-- Application Structure Plan: Designed as an interactive single-page dashboard. A secure login screen now gates access. Post-login, key views (Dashboard, Action Plan, Roadmap, Risks) are managed by tabbed navigation. The goal is a live, secure tool for the user to track progress. KPIs and charts are interactive, updating based on user input, which is central to the application's purpose of tracking progress against the R$1,450 goal. -->
+    <!-- Visualization & Content Choices:
+        - Login Screen -> Goal: Secure -> Simple form with secure hash-based authentication using the browser's SubtleCrypto API. Justification: Prevents plaintext password exposure in the source code as requested.
+        - Mission/KPIs -> Goal: Inform/Track -> Dynamic stat cards, interactive progress bar (HTML/CSS/JS), and a dynamic donut chart (Chart.js) to visualize revenue mix. Justification: Provides an at-a-glance summary of progress.
+        - 3 Pillars & Workflow -> Goal: Organize/Inform -> Collapsible accordions and styled cards (HTML/Tailwind/JS). Justification: Organizes static information cleanly.
+        - Roadmap -> Goal: Track Change -> Interactive monthly cards with an accordion mechanism. Justification: Makes the long-term plan feel tangible.
+        - Risks -> Goal: Inform -> Simple table (HTML/Tailwind). Justification: Clear and direct presentation.
+        -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF8; /* Warm neutral background */
+        }
+        .nav-link {
+            transition: all 0.3s;
+        }
+        .nav-link.active {
+            color: #00796B; /* Muted teal accent */
+            border-bottom-color: #00796B;
+        }
+        .card {
+            background-color: #FFFFFF;
+            border: 1px solid #E0E0E0;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+        }
+        .progress-bar-bg {
+            background-color: #E0E0E0;
+        }
+        .progress-bar-fill {
+            background-color: #009688; /* Muted teal accent */
+            transition: width 0.5s ease-in-out;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .accordion-content.open {
+            max-height: 500px; /* Adjust as needed */
+        }
+        .btn-primary {
+            background-color: #00796B;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .btn-primary:hover {
+            background-color: #00695C;
+        }
+        .btn-primary:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+        .chart-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 400px; 
+            margin-left: auto; 
+            margin-right: auto; 
+            height: 300px;
+            max-height: 350px;
+        }
+        @media (min-width: 768px) { 
+            .chart-container { 
+                height: 350px; 
+            } 
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Login Screen -->
+    <section id="login-screen" class="flex items-center justify-center h-screen">
+        <div class="card p-8 rounded-lg w-full max-w-sm">
+            <h2 class="text-2xl font-bold text-center text-gray-900 mb-6">Acessar Projeto</h2>
+            <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                <span class="block sm:inline">Usuário ou senha inválidos.</span>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label for="username-input" class="block text-sm font-medium text-gray-700">Usuário</label>
+                    <input type="text" id="username-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2">
+                </div>
+                <div>
+                    <label for="password-input" class="block text-sm font-medium text-gray-700">Senha</label>
+                    <input type="password" id="password-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2">
+                </div>
+                <button id="login-button" class="w-full btn-primary font-bold py-2 px-4 rounded-lg">
+                    <span id="login-button-text">Entrar</span>
+                    <span id="login-spinner" class="hidden animate-spin">●</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Dashboard Container -->
+    <div id="main-container" class="container mx-auto p-4 md:p-8 hidden">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">🎨 Projeto Liberdade</h1>
+            <p class="text-lg text-gray-600 mt-2">Seu painel de controle para a independência financeira.</p>
+        </header>
+
+        <nav class="mb-8 border-b border-gray-200">
+            <ul class="flex justify-center -mb-px space-x-4 md:space-x-8">
+                <li><a href="#" class="nav-link active text-lg font-medium py-4 px-1 border-b-2 border-transparent" data-target="dashboard">Painel Principal</a></li>
+                <li><a href="#" class="nav-link text-lg font-medium py-4 px-1 border-b-2 border-transparent" data-target="plan">Plano de Ação</a></li>
+                <li><a href="#" class="nav-link text-lg font-medium py-4 px-1 border-b-2 border-transparent" data-target="roadmap">Roadmap</a></li>
+                <li><a href="#" class="nav-link text-lg font-medium py-4 px-1 border-b-2 border-transparent" data-target="risks">Riscos</a></li>
+            </ul>
+        </nav>
+
+        <main>
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="content-section">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <!-- Faturamento Atual -->
+                    <div class="card p-6 rounded-lg text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Faturamento do Mês</h3>
+                        <p id="kpi-total-revenue" class="text-4xl font-bold text-gray-900 mt-2">R$ 0,00</p>
+                    </div>
+                    <!-- Meta Mensal -->
+                    <div class="card p-6 rounded-lg text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Meta Mensal</h3>
+                        <p class="text-4xl font-bold text-gray-900 mt-2">R$ 1.450</p>
+                    </div>
+                     <!-- Vendas Ebook -->
+                     <div class="card p-6 rounded-lg text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Vendas (Ebook)</h3>
+                        <p id="kpi-sales-revenue" class="text-4xl font-bold text-teal-600 mt-2">R$ 0,00</p>
+                    </div>
+                    <!-- Receita Ads -->
+                    <div class="card p-6 rounded-lg text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Receita (Ads)</h3>
+                        <p id="kpi-ads-revenue" class="text-4xl font-bold text-amber-600 mt-2">R$ 0,00</p>
+                    </div>
+                </div>
+
+                <div class="card p-6 rounded-lg mb-8">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-2">Progresso para a Meta</h3>
+                    <div class="flex items-center">
+                        <div class="w-full progress-bar-bg rounded-full h-4">
+                            <div id="progress-bar" class="progress-bar-fill h-4 rounded-full" style="width: 0%;"></div>
+                        </div>
+                        <span id="progress-text" class="ml-4 text-lg font-medium text-gray-700">0%</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 card p-6 rounded-lg">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Atualizar Ganhos</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="sales-input" class="block text-sm font-medium text-gray-700">💰 Ganhos com Vendas (Ebook)</label>
+                                <input type="number" id="sales-input" placeholder="Ex: 1000" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2">
+                            </div>
+                            <div>
+                                <label for="ads-input" class="block text-sm font-medium text-gray-700">📈 Ganhos com Ads (TikTok)</label>
+                                <input type="number" id="ads-input" placeholder="Ex: 450" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2">
+                            </div>
+                            <button id="update-button" class="w-full btn-primary font-bold py-2 px-4 rounded-lg">
+                                Atualizar Painel
+                            </button>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2 card p-6 rounded-lg">
+                        <h3 class="text-xl font-semibold text-center text-gray-700 mb-4">Divisão da Receita</h3>
+                        <div class="chart-container">
+                            <canvas id="revenueChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Action Plan Section -->
+            <section id="plan" class="content-section hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="card p-6 rounded-lg">
+                        <h3 class="text-2xl font-bold mb-2">👨‍👩‍👧 Pilar 1: Acordo Familiar</h3>
+                        <p class="text-gray-600">O projeto é uma meta da família. A base de tudo é uma conversa honesta, apresentando a visão e propondo um equilíbrio claro entre o tempo de foco e o tempo de família para garantir a sustentabilidade do projeto.</p>
+                    </div>
+                    <div class="card p-6 rounded-lg">
+                        <h3 class="text-2xl font-bold mb-2">🗓️ Pilar 2: Rotina Ninja</h3>
+                        <p class="text-gray-600">Máxima eficiência para aproveitar cada minuto. O trabalho é dividido em "Modo Preparação" durante a semana e "Fábrica de Conteúdo" em blocos de foco no fim de semana.</p>
+                    </div>
+                    <div class="card p-6 rounded-lg">
+                        <h3 class="text-2xl font-bold mb-2">🛠️ Pilar 3: Ferramentas de Eficiência</h3>
+                        <p class="text-gray-600">Uso de ferramentas inteligentes para o tempo render mais: templates de vídeo, checklists de produção e Inteligência Artificial para acelerar a criação de roteiros e ideias.</p>
+                    </div>
+                </div>
+
+                <div class="card p-6 rounded-lg">
+                    <h3 class="text-2xl font-bold mb-4 text-center">⚙️ Fluxo de Trabalho Semanal</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-3 border-b-2 border-teal-500 pb-2">De Segunda a Sexta (Preparação)</h4>
+                            <ul class="space-y-3 text-gray-700">
+                                <li><strong>☀️ Manhã (Trajeto):</strong> Pesquisa de temas e ideias de vídeos.</li>
+                                <li><strong>🕛 Almoço:</strong> Engajamento (responder comentários) e roteirização.</li>
+                                <li><strong>🌙 Noite (Trajeto):</strong> Busca e download de clipes/imagens.</li>
+                                <li class="font-bold text-teal-700">🏁 Meta da Sexta: 7 a 10 roteiros de vídeo prontos.</li>
+                            </ul>
+                        </div>
+                        <div>
+                             <h4 class="text-xl font-semibold mb-3 border-b-2 border-amber-500 pb-2">Fim de Semana (Fábrica)</h4>
+                             <ul class="space-y-3 text-gray-700">
+                                <li><strong>🚀 Sábado (Ex: 14h - 19h):</strong> Bloco de Foco Total.</li>
+                                <li><strong>Hora 1:</strong> Organizar todo o material da semana em pastas.</li>
+                                <li><strong>Hora 2-4:</strong> Editar todos os vídeos em lote, usando templates.</li>
+                                <li><strong>Hora 5:</strong> Agendar todas as postagens da semana no TikTok.</li>
+                                <li class="font-bold text-red-700">❤️ Resto do Fim de Semana: 100% Livre para a Família.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Roadmap Section -->
+            <section id="roadmap" class="content-section hidden">
+                <div class="space-y-4">
+                    <!-- Month 1 -->
+                    <div class="card p-5 rounded-lg accordion-header cursor-pointer" data-month="1">
+                        <div class="flex justify-between items-center">
+                             <h3 class="text-xl font-bold">Mês 1: Validação (~ R$ 500)</h3>
+                             <span class="text-2xl transform transition-transform">▼</span>
+                        </div>
+                        <div class="accordion-content pt-4 text-gray-600">
+                            <ul class="list-disc list-inside space-y-2">
+                                <li>Lançar as Contas 2 e 3.</li>
+                                <li>Validar e aperfeiçoar a rotina de produção em lote.</li>
+                                <li>Otimizar o CTA (Chamada para Ação) e o link da bio na Conta 1.</li>
+                            </ul>
+                        </div>
+                    </div>
+                     <!-- Month 2 -->
+                    <div class="card p-5 rounded-lg accordion-header cursor-pointer" data-month="2">
+                        <div class="flex justify-between items-center">
+                             <h3 class="text-xl font-bold">Mês 2: Crescimento (~ R$ 800)</h3>
+                             <span class="text-2xl transform transition-transform">▼</span>
+                        </div>
+                        <div class="accordion-content pt-4 text-gray-600">
+                            <ul class="list-disc list-inside space-y-2">
+                                <li>Focar em ganhar seguidores nas novas contas.</li>
+                                <li>Consolidar a receita da Conta 1, buscando crescimento.</li>
+                                <li>Analisar primeiras métricas e testar diferentes formatos de vídeo.</li>
+                            </ul>
+                        </div>
+                    </div>
+                     <!-- Month 3 -->
+                    <div class="card p-5 rounded-lg accordion-header cursor-pointer" data-month="3">
+                        <div class="flex justify-between items-center">
+                             <h3 class="text-xl font-bold">Mês 3: Monetização (~ R$ 1.100)</h3>
+                             <span class="text-2xl transform transition-transform">▼</span>
+                        </div>
+                        <div class="accordion-content pt-4 text-gray-600">
+                           <ul class="list-disc list-inside space-y-2">
+                                <li>Monetizar a Conta 2 (atingir 10k seguidores e 100k views).</li>
+                                <li>Escalar a produção de conteúdo.</li>
+                                <li>Começar a medir o RPM (Receita por Mil Visualizações).</li>
+                            </ul>
+                        </div>
+                    </div>
+                     <!-- Month 4 -->
+                    <div class="card p-5 rounded-lg accordion-header cursor-pointer" data-month="4">
+                        <div class="flex justify-between items-center">
+                             <h3 class="text-xl font-bold">Mês 4: Otimização (~ R$ 1.450)</h3>
+                             <span class="text-2xl transform transition-transform">▼</span>
+                        </div>
+                        <div class="accordion-content pt-4 text-gray-600">
+                           <ul class="list-disc list-inside space-y-2">
+                                <li>Monetizar a Conta 3.</li>
+                                <li>Analisar e focar nos vídeos com maior RPM e maior conversão de vendas.</li>
+                                <li>Atingir a meta principal de R$1.450.</li>
+                            </ul>
+                        </div>
+                    </div>
+                     <!-- Month 5 -->
+                    <div class="card p-5 rounded-lg accordion-header cursor-pointer" data-month="5">
+                        <div class="flex justify-between items-center">
+                             <h3 class="text-xl font-bold">Mês 5: Estabilização (+ R$ 1.450)</h3>
+                             <span class="text-2xl transform transition-transform">▼</span>
+                        </div>
+                        <div class="accordion-content pt-4 text-gray-600">
+                            <ul class="list-disc list-inside space-y-2">
+                                <li>Manter e estabilizar o faturamento acima da meta.</li>
+                                <li>Refinar a esteira de vendas do ebook.</li>
+                                <li>Criar um "caixa" de vídeos (produzir com antecedência) para ter semanas de folga.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Risks Section -->
+            <section id="risks" class="content-section hidden">
+                <div class="card p-6 rounded-lg overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 border-b-2 border-gray-200">
+                            <tr>
+                                <th class="p-4 text-sm font-semibold tracking-wide">Risco</th>
+                                <th class="p-4 text-sm font-semibold tracking-wide">Solução</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr class="bg-white">
+                                <td class="p-4 text-gray-700">Cansaço / Conflito Familiar</td>
+                                <td class="p-4 text-gray-700">✅ **Cumprir o Acordo.** Respeitar rigorosamente os horários de foco e os horários de descanso e família.</td>
+                            </tr>
+                            <tr class="bg-gray-50">
+                                <td class="p-4 text-gray-700">Conta Desmonetizada</td>
+                                <td class="p-4 text-gray-700">✅ **Renda Híbrida.** A maior parte da receita vem das vendas do ebook, que não depende da monetização do TikTok.</td>
+                            </tr>
+                             <tr class="bg-white">
+                                <td class="p-4 text-gray-700">Conteúdo Não Viralizar</td>
+                                <td class="p-4 text-gray-700">✅ **Consistência e Análise.** Manter o ritmo de postagem e analisar as métricas semanalmente para adaptar o que não funciona.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        async function sha256(string) {
+            const utf8 = new TextEncoder().encode(string);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashHex;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            const loginScreen = document.getElementById('login-screen');
+            const mainContainer = document.getElementById('main-container');
+            const loginButton = document.getElementById('login-button');
+            const loginButtonText = document.getElementById('login-button-text');
+            const loginSpinner = document.getElementById('login-spinner');
+            const usernameInput = document.getElementById('username-input');
+            const passwordInput = document.getElementById('password-input');
+            const errorMessage = document.getElementById('error-message');
+
+            const credentials = {
+                username: 'ThiagooSantos',
+                passwordHash: '05216f2fdbe020f645c5b98f97613e5fe1216299c0056dd26cfb43f7c41b1895'
+            };
+            
+            async function attemptLogin() {
+                loginButton.disabled = true;
+                loginButtonText.classList.add('hidden');
+                loginSpinner.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+
+                const inputUsername = usernameInput.value;
+                const inputPassword = passwordInput.value;
+                
+                const inputPasswordHash = await sha256(inputPassword);
+
+                if (inputUsername === credentials.username && inputPasswordHash === credentials.passwordHash) {
+                    loginScreen.classList.add('hidden');
+                    mainContainer.classList.remove('hidden');
+                    initializeDashboard();
+                } else {
+                    errorMessage.classList.remove('hidden');
+                    loginButton.disabled = false;
+                    loginButtonText.classList.remove('hidden');
+                    loginSpinner.classList.add('hidden');
+                }
+            }
+
+            loginButton.addEventListener('click', attemptLogin);
+            passwordInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    attemptLogin();
+                }
+            });
+
+
+            function initializeDashboard() {
+                const state = {
+                    salesRevenue: 0,
+                    adsRevenue: 0,
+                    totalRevenue: 0,
+                    goal: 1450,
+                };
+
+                const salesInput = document.getElementById('sales-input');
+                const adsInput = document.getElementById('ads-input');
+                const updateButton = document.getElementById('update-button');
+
+                const kpiTotalRevenue = document.getElementById('kpi-total-revenue');
+                const kpiSalesRevenue = document.getElementById('kpi-sales-revenue');
+                const kpiAdsRevenue = document.getElementById('kpi-ads-revenue');
+                const progressBar = document.getElementById('progress-bar');
+                const progressText = document.getElementById('progress-text');
+
+                const navLinks = document.querySelectorAll('.nav-link');
+                const contentSections = document.querySelectorAll('.content-section');
+                const accordionHeaders = document.querySelectorAll('.accordion-header');
+
+                const formatCurrency = (value) => {
+                    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+                };
+
+                const ctx = document.getElementById('revenueChart').getContext('2d');
+                const revenueChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Vendas (Ebook)', 'Receita (Ads)'],
+                        datasets: [{
+                            data: [0, 0],
+                            backgroundColor: ['#00897B', '#F59E0B'],
+                            borderColor: '#FFFFFF',
+                            borderWidth: 4,
+                            hoverOffset: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 20,
+                                    font: {
+                                        size: 14,
+                                        family: 'Inter'
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed !== null) {
+                                            label += formatCurrency(context.parsed);
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                function updateUI() {
+                    state.totalRevenue = state.salesRevenue + state.adsRevenue;
+                    
+                    kpiTotalRevenue.textContent = formatCurrency(state.totalRevenue);
+                    kpiSalesRevenue.textContent = formatCurrency(state.salesRevenue);
+                    kpiAdsRevenue.textContent = formatCurrency(state.adsRevenue);
+
+                    const progressPercentage = state.goal > 0 ? (state.totalRevenue / state.goal) * 100 : 0;
+                    progressBar.style.width = `${Math.min(progressPercentage, 100)}%`;
+                    progressText.textContent = `${Math.round(progressPercentage)}%`;
+                    
+                    revenueChart.data.datasets[0].data = [state.salesRevenue, state.adsRevenue];
+                    revenueChart.update();
+                }
+
+                updateButton.addEventListener('click', () => {
+                    const salesValue = parseFloat(salesInput.value) || 0;
+                    const adsValue = parseFloat(adsInput.value) || 0;
+                    
+                    state.salesRevenue = salesValue;
+                    state.adsRevenue = adsValue;
+
+                    updateUI();
+                });
+
+                navLinks.forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        
+                        navLinks.forEach(l => l.classList.remove('active'));
+                        link.classList.add('active');
+
+                        const targetId = link.getAttribute('data-target');
+                        contentSections.forEach(section => {
+                            if (section.id === targetId) {
+                                section.classList.remove('hidden');
+                            } else {
+                                section.classList.add('hidden');
+                            }
+                        });
+                    });
+                });
+
+                accordionHeaders.forEach(header => {
+                    header.addEventListener('click', () => {
+                        const content = header.querySelector('.accordion-content');
+                        const icon = header.querySelector('span');
+                        
+                        if (content.classList.contains('open')) {
+                            content.classList.remove('open');
+                            icon.style.transform = 'rotate(0deg)';
+                        } else {
+                            content.classList.add('open');
+                            icon.style.transform = 'rotate(180deg)';
+                        }
+                    });
+                });
+
+                updateUI();
+            }
+        });
+    </script>
+</body>
+</html>
